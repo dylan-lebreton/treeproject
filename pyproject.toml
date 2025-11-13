@@ -1,0 +1,35 @@
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "treeproject"
+version = "0.1.0"
+description = "treeproject is a lightweight Python library that scans a directory and builds a clean anytree-based representation of its filesystem structure. Files and folders become navigable nodes, enabling filtering, traversal, visualization, and content extraction."
+readme = "README.md"
+license = "MIT"
+authors = ["Dylan Lebreton <dylan.lebreton1996@gmail.com>"]
+keywords = ["filesystem", "tree", "anytree", "path", "utilities"]
+homepage = "https://github.com/dylan-lebreton/treeproject"
+repository = "https://github.com/dylan-lebreton/treeproject"
+documentation = "https://github.com/dylan-lebreton/treeproject#readme"
+
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Utilities",
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4.0"
+anytree = ">=2.13.0,<3.0.0"
+pathspec = ">=0.12.1,<0.13.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=7,<10"
