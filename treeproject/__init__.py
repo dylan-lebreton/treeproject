@@ -1,16 +1,18 @@
-# treeproject/__init__.py
+"""
+treeproject — lightweight filesystem tree and content utilities.
+
+This package provides simple, composable tools to:
+- render directory structures as readable trees,
+- extract and concatenate file contents with fine-grained filtering.
+
+The API is based on ``pathlib.Path`` and is designed to be dependency-free,
+deterministic, and suitable for programmatic as well as human-facing use
+cases.
+"""
+
 from __future__ import annotations
 
-from .content import get_files_content, get_files_content_from_node
-from .pretty import draw_tree, build_and_draw_tree
-from .summary import build_tree_and_contents
-from .tree import build_tree
+from .tree import print_tree
+from .content import path_content
 
-__all__ = [
-    "build_tree",
-    "draw_tree",
-    "build_and_draw_tree",
-    "get_files_content_from_node",
-    "get_files_content",
-    "build_tree_and_contents"
-]
+__all__ = ["print_tree", "path_content"]
