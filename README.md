@@ -1,13 +1,15 @@
 # treeproject
 
-**treeproject** is a lightweight Python library that scans a directory and builds an **anytree-based** hierarchy of its filesystem structure. It provides utilities for:
+**treeproject** is a lightweight Python library providing simple, deterministic
+utilities to:
 
-- Building a tree (`build_tree`)
-- Rendering the tree as readable text (`draw_tree`, `build_and_draw_tree`)
-- Extracting file contents (`get_files_content`, `get_files_content_from_node`)
-- Combining the tree + selected file contents (`build_tree_and_contents`)
+- render a directory structure as a readable Unicode tree,
+- extract and concatenate file contents into a single structured text bundle.
 
-It is useful for documentation, tooling, debugging, or generating compact context bundles for LLMs. It supports `.gitignore`-style exclusion patterns via `pathspec`.
+It is designed for documentation, debugging, tooling, and building compact
+filesystem context bundles (for example, for LLM prompts).
+
+The API is intentionally minimal, dependency-free, and based on `pathlib.Path`.
 
 ---
 
@@ -17,159 +19,122 @@ It is useful for documentation, tooling, debugging, or generating compact contex
 pip install treeproject
 ```
 
-Requires **Python 3.10+**. Dependencies: `anytree` and `pathspec`.
+Requires **Python 3.10+**.
 
 ---
 
-## Quick Examples
+## Features
 
-### 1) Render a directory tree
+- Unicode tree rendering (similar to the Unix `tree` command)
+- Deterministic traversal (directories first, case-insensitive sorting)
+- Strict pruning-based filtering
+- Optional symbolic link traversal
+- Text content extraction with stable formatting
+- Binary file detection and skipping
+- Configurable encoding and error handling
+- Zero runtime dependencies
+
+---
+
+## Quick Start
+
+### Print a directory tree
 
 ```python
-from treeproject import build_and_draw_tree
+from pathlib import Path
+from treeproject import print_tree
 
-print(build_and_draw_tree(
-    "./my_project",
-    exclude=["__pycache__/", ".git/", "*.log"]
-))
+print_tree(Path("./my_project"))
 ```
 
 Example output:
 
 ```
 my_project
-├── docs
-│   └── readme.md
+├── README.md
+├── pyproject.toml
 └── src
-    ├── app.py
-    └── utils.py
+    ├── __init__.py
+    └── app.py
 ```
 
 ---
 
-### 2) Extract file contents (filtered)
+### Extract file contents
 
 ```python
-from treeproject import get_files_content
+from pathlib import Path
+from treeproject import path_content
 
-bundle = get_files_content(
-    "./my_project",
-    exclude=[".venv/", "build/", "*.pyc"],
-    include=[".py", ".md"],
-    ignore_file_type_error=True
-)
-
+bundle = path_content(Path("./my_project"))
 print(bundle)
 ```
 
-Output format (example):
+Example output format:
 
 ```
-"""my_project/src/app.py
-print("hello")
-"""
-
-"""my_project/docs/readme.md
+===== FILE: README.md =====
 # My Project
-"""
+...
+===== END FILE =====
+
+===== FILE: src/app.py =====
+print("hello")
+===== END FILE =====
 ```
 
 ---
 
-### 3) Combine tree + file contents
+## Filtering and Pruning
+
+Filtering is controlled via an `include(Path) -> bool` predicate.
+
+If the predicate returns `False` for a directory, the directory is **pruned**
+and none of its descendants are visited.
 
 ```python
-from treeproject import build_tree_and_contents
+IGNORE = {".git", "__pycache__", ".pytest_cache"}
 
-summary = build_tree_and_contents(
-    "./my_project",
-    tree_exclude=[".git/", "__pycache__/"],
-    content_include=[".py", ".md"],
-    content_ignore_file_type_error=True,
-)
+def include(p: Path) -> bool:
+    return p.name not in IGNORE
 
-print(summary)
+print_tree(Path("."), include=include)
 ```
 
----
-
-## API Overview
-
-### `build_tree(root, *, follow_symlinks=False, exclude=None) -> anytree.Node`
-Builds an anytree `Node` hierarchy from a filesystem path.
-
-Node attributes:
-- `fs_path: pathlib.Path`
-- `is_dir: bool`
-- `is_symlink: bool`
-
-Supports gitignore-style exclusions:
-- `*`, `?`, `[]`, `**`
-- `pattern/` matches directories
-- `/pattern` is root-relative
+The same predicate can be reused for content extraction.
 
 ---
 
-### `draw_tree(node) -> str`
-Renders an anytree node into a human-readable ASCII/UTF-8 tree using Unicode connectors.
+## API Reference
+
+### `print_tree(root, *, follow_symlinks=False, include=lambda p: True) -> None`
+
+Print a Unicode directory tree to standard output.
+
+- Directories are listed before files
+- Sorting is case-insensitive
+- Excluded directories are fully pruned
 
 ---
 
-### `build_and_draw_tree(root, *, follow_symlinks=False, exclude=None) -> str`
-Convenience wrapper: builds a tree, then renders it.
+### `path_content(root, *, follow_symlinks=False, include=lambda p: True,
+skip_binary=True, encoding="utf-8", errors="raise") -> str`
+
+Walk a filesystem path and return a single string containing the formatted
+contents of all selected files.
+
+- Files are processed in deterministic order
+- Binary files can be skipped automatically
+- Errors can be raised or ignored per file
 
 ---
 
-### `get_files_content(root, *, exclude=None, include=None, ignore_file_type_error=False, encoding="utf-8") -> str`
-Returns concatenated file contents (sorted by relative path).  
-Output is a list of blocks:
+## Design Notes
 
-```
-"""root/relative/path
-<file content>
-"""
-```
-
----
-
-### `get_files_content_from_node(node, *, exclude=None, include=None, ignore_file_type_error=False, encoding="utf-8") -> str`
-Same as above, but using an already-built tree.
-
----
-
-### `build_tree_and_contents(...) -> str`
-Builds the tree once, prints:
-
-1. The rendered tree  
-2. A blank line  
-3. File content blocks, filtered independently  
-
----
-
-## Exclusion Patterns
-
-All exclusions use `pathspec` with gitignore-style syntax.
-
-Examples:
-
-- `".*/"` → all dot-directories  
-- `"__pycache__/"`  
-- `"*.pyc"`  
-- `"build/"`  
-- `"*.log"`  
-- `"/README.md"` → match root-relative file  
-
----
-
-## Behavior
-
-- Directories appear before files, sorted case-insensitively.
-- Symbolic links:
-  - directory symlinks followed only if `follow_symlinks=True`
-  - file symlinks treated as leaf nodes
-- Unreadable directories are skipped safely
-- Non-text files are skipped when `ignore_file_type_error=True`
-- UTF-8 encoding by default
+- Uses `pathlib.Path.walk` for traversal
+- No global state
+- No side effects except explicit printing in `print_tree`
+- Suitable for programmatic use and automation
 
 ---
 
@@ -179,22 +144,13 @@ Examples:
 git clone https://github.com/dylan-lebreton/treeproject
 cd treeproject
 poetry install
-pytest -q
+pytest
 ```
-
----
-
-## Roadmap
-
-- Tree export to JSON/YAML
-- Alternate rendering styles
-- Advanced filtering (glob sets, regexes, ignore vs allow priority rules)
-- CLI interface
 
 ---
 
 ## License
 
-MIT License  
-Copyright (c)  
-Dylan Lebreton  
+MIT License
+
+Copyright (c) 2025 Dylan Lebreton
