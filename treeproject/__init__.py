@@ -12,7 +12,7 @@ cases.
 
 from __future__ import annotations
 
-from .tree import print_tree
+from .tree import path_tree
 from .content import path_content
 
-__all__ = ["print_tree", "path_content"]
+__all__ = ["path_tree", "path_content"]
