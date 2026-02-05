@@ -1,122 +1,157 @@
+# treeproject/tree.py
+
+"""
+Filesystem tree rendering utilities.
+
+This module provides a lightweight, dependency-free utility to render a
+directory structure as a human-readable Unicode tree, similar to the Unix
+``tree`` command.
+
+Traversal is deterministic (directories first, case-insensitive sorting),
+supports optional symbolic link following, and relies on strict pruning-based
+filtering: if a directory is excluded, its entire subtree is skipped.
+
+The main entry point is :func:`print_tree`, which prints directly to standard
+output.
+"""
+
+
 from __future__ import annotations
 
 from pathlib import Path
-
-from anytree import Node
-from pathspec import PathSpec
-from pathspec.patterns.gitwildmatch import GitWildMatchPattern
-
-__all__ = ["build_tree"]
+from typing import Callable
 
 
-def build_tree(
-        root: str | Path,
-        *,
-        follow_symlinks: bool = False,
-        exclude: list[str] | None = None,
-) -> Node:
+def is_dir(p: Path) -> bool:
     """
-    Build an `anytree.Node` hierarchy representing the filesystem rooted at `root`.
+    Safely determine whether a path refers to a directory.
 
-    The tree closely reflects the underlying directory structure:
-    - Each node corresponds to either a file or a directory.
-    - File nodes are always leaves.
-    - Directory nodes may or may not have children.
-    - Symbolic links are represented as nodes, but symlinked directories are not
-      traversed unless `follow_symlinks=True`.
-
-    Exclusion rules:
-        The `exclude` parameter accepts a list of gitignore-style patterns.
-        Any file or directory matching any of the patterns is entirely excluded.
-        For directories, exclusion prevents descending into that directory.
-
-        Supported pattern syntax (via `pathspec`):
-        - `*`, `?`, `[]` wildcards
-        - `**` recursive wildcard
-        - `pattern/` to match directories specifically
-        - `/pattern` to match relative to the project root
+    This helper wraps ``Path.is_dir()`` to guard against filesystem-related
+    errors (e.g. permission issues), returning ``False`` if the directory
+    status cannot be determined.
 
     Parameters
     ----------
-    root : str | Path
-        The root directory to scan. If it is a file, a single-node tree is returned.
-    follow_symlinks : bool, optional (default=False)
-        If True, descend into symlinked directories. By default, symlinked directories
-        are not followed to avoid cycles.
-    exclude : list[str] | None, optional
-        List of gitignore-style patterns to exclude. Defaults to no exclusion.
+    p : pathlib.Path
+        Path to test.
 
     Returns
     -------
-    Node
-        The root node of the constructed tree. Each node carries:
-        - `fs_path`: `pathlib.Path` (absolute, resolved)
-        - `is_dir`: `bool`
-        - `is_symlink`: `bool`
+    bool
+        ``True`` if the path is a directory, ``False`` otherwise.
+    """
+
+    try:
+        return p.is_dir()
+    except OSError:
+        return False
+
+
+def print_tree(
+    root: Path,
+    *,
+    follow_symlinks: bool = False,
+    include: Callable[[Path], bool] = lambda p: True,
+) -> None:
+    """
+    Print a directory tree to standard output using a Unicode-based layout.
+
+    Starting from ``root``, this function recursively traverses the filesystem
+    and prints a visual representation of the directory structure using
+    tree-style connectors (``├──``, ``└──``, ``│``).
+
+    Traversal order is stable and deterministic:
+    - directories are listed before files,
+    - entries are sorted case-insensitively by name.
+
+    Structural filtering is controlled via the ``include`` predicate. If
+    ``include(path)`` returns ``False`` for a directory, that directory is
+    pruned entirely and none of its descendants are visited.
+
+    Parameters
+    ----------
+    root : pathlib.Path
+        Root directory to display.
+    follow_symlinks : bool, default=False
+        Whether to follow symbolic links to directories during traversal.
+    include : Callable[[pathlib.Path], bool], optional
+        Predicate used to filter paths. If it returns ``False`` for a path,
+        that path is neither displayed nor traversed. For directories, this
+        results in full subtree pruning.
+
+    Returns
+    -------
+    None
+        This function prints directly to standard output.
 
     Raises
     ------
-    FileNotFoundError
-        If `root` does not exist.
-
-    Notes
-    -----
-    - The function never raises errors for unreadable directories; they are skipped.
-    - `anytree.Node.path` (built-in) returns a tuple of nodes along the tree path.
-      The filesystem path is stored under `node.fs_path` to avoid name clashes.
+    OSError
+        If a filesystem operation fails while resolving the root path.
     """
-    root_path = Path(root).expanduser().resolve(strict=False)
-    if not root_path.exists():
-        raise FileNotFoundError(root_path)
 
-    spec = PathSpec.from_lines(GitWildMatchPattern, exclude or [])
+    root = root.resolve()
+    print(root)
 
-    def _rel_posix(p: Path) -> str:
+    def iter_children(d: Path) -> list[Path]:
+        """
+        Return the immediate children of a directory in stable tree order.
+
+        Children are sorted such that directories appear before files, and all
+        entries are ordered case-insensitively by name. If the directory cannot
+        be read, an empty list is returned.
+
+        Parameters
+        ----------
+        d : pathlib.Path
+            Directory whose children should be listed.
+
+        Returns
+        -------
+        list[pathlib.Path]
+            Sorted list of child paths.
+        """
+
         try:
-            rel = p.relative_to(root_path).as_posix()
-        except ValueError:
-            rel = p.as_posix()
-        if p.is_dir():
-            rel = rel.rstrip("/") + "/"
-        return rel
-
-    def _is_excluded(p: Path) -> bool:
-        return spec.match_file(_rel_posix(p))
-
-    def _iter_children(dir_path: Path) -> list[Path]:
-        try:
-            entries = list(dir_path.iterdir())
-        except PermissionError:
+            children = list(d.iterdir())
+        except OSError:
             return []
-        entries.sort(key=lambda e: (not e.is_dir(), e.name.casefold()))
-        return [e for e in entries if not _is_excluded(e)]
+        # Keep a stable, "tree-like" order: dirs first, then files; case-insensitive name sort.
+        children.sort(key=lambda p: (not is_dir(p), p.name.casefold()))
+        return children
 
-    def _build(path: Path, parent: Node | None) -> Node:
-        is_dir = path.is_dir()
-        is_link = path.is_symlink()
+    def rec(d: Path, prefix: str) -> None:
+        """
+        Recursively print a subtree with proper tree-style indentation.
 
-        node = Node(
-            path.name,
-            parent=parent,
-            fs_path=path,  # <-- FS path lives here
-            is_dir=is_dir,
-            is_symlink=is_link,
-        )
+        This function prints the children of a directory using the appropriate
+        Unicode branch connectors and maintains vertical continuation bars for
+        ancestor levels as needed.
 
-        if is_dir:
-            if is_link and not follow_symlinks:
-                return node
-            for child in _iter_children(path):
-                _build(child, parent=node)
+        Directory traversal is subject to the ``include`` predicate and the
+        ``follow_symlinks`` setting.
 
-        return node
+        Parameters
+        ----------
+        d : pathlib.Path
+            Directory currently being traversed.
+        prefix : str
+            Prefix string used to align and draw tree branches.
+        """
 
-    if root_path.is_file():
-        return Node(
-            root_path.name,
-            fs_path=root_path,
-            is_dir=False,
-            is_symlink=root_path.is_symlink(),
-        )
+        # Prune + hide are the same here: if include() is False, we neither show nor descend.
+        children = [c for c in iter_children(d) if include(c)]
+        n = len(children)
 
-    return _build(root_path, parent=None)
+        for i, child in enumerate(children):
+            last = i == n - 1
+            branch = "└── " if last else "├── "
+            print(prefix + branch + child.name)
+
+            if is_dir(child):
+                ext = "    " if last else "│   "
+                if follow_symlinks or not child.is_symlink():
+                    rec(child, prefix + ext)
+
+    # If you want the filter to be able to exclude the root itself, handle it outside.
+    rec(root, "")
