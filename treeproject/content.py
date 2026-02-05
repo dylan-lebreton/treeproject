@@ -22,8 +22,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Literal
 
-from treeproject.tree import print_tree
-
 
 def file_to_text(
     path: Path,
