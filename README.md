@@ -38,13 +38,13 @@ Requires **Python 3.10+**.
 
 ## Quick Start
 
-### Print a directory tree
+### Render a directory tree
 
 ```python
 from pathlib import Path
-from treeproject import print_tree
+from treeproject import path_tree
 
-print_tree(Path("./my_project"))
+print(path_tree(Path("./my_project")))
 ```
 
 Example output:
@@ -98,7 +98,7 @@ IGNORE = {".git", "__pycache__", ".pytest_cache"}
 def include(p: Path) -> bool:
     return p.name not in IGNORE
 
-print_tree(Path("."), include=include)
+print(path_tree(Path("."), include=include))
 ```
 
 The same predicate can be reused for content extraction.
@@ -107,9 +107,9 @@ The same predicate can be reused for content extraction.
 
 ## API Reference
 
-### `print_tree(root, *, follow_symlinks=False, include=lambda p: True) -> None`
+### `path_tree(root, *, follow_symlinks=False, include=lambda p: True) -> str`
 
-Print a Unicode directory tree to standard output.
+Render a Unicode directory tree and return it as a string.
 
 - Directories are listed before files
 - Sorting is case-insensitive
@@ -133,7 +133,7 @@ contents of all selected files.
 
 - Uses `pathlib.Path.walk` for traversal
 - No global state
-- No side effects except explicit printing in `print_tree`
+- No side effects except explicit string rendering in `path_tree`
 - Suitable for programmatic use and automation
 
 ---
