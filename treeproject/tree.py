@@ -11,8 +11,8 @@ Traversal is deterministic (directories first, case-insensitive sorting),
 supports optional symbolic link following, and relies on strict pruning-based
 filtering: if a directory is excluded, its entire subtree is skipped.
 
-The main entry point is :func:`print_tree`, which prints directly to standard
-output.
+The main entry point is :func:`path_tree`, which returns the rendered tree
+as a string.
 """
 
 
@@ -47,17 +47,17 @@ def is_dir(p: Path) -> bool:
         return False
 
 
-def print_tree(
+def path_tree(
     root: Path,
     *,
     follow_symlinks: bool = False,
     include: Callable[[Path], bool] = lambda p: True,
-) -> None:
+) -> str:
     """
-    Print a directory tree to standard output using a Unicode-based layout.
+    Render a directory tree as a Unicode string using a tree-style layout.
 
     Starting from ``root``, this function recursively traverses the filesystem
-    and prints a visual representation of the directory structure using
+    and produces a visual representation of the directory structure using
     tree-style connectors (``├──``, ``└──``, ``│``).
 
     Traversal order is stable and deterministic:
@@ -81,8 +81,8 @@ def print_tree(
 
     Returns
     -------
-    None
-        This function prints directly to standard output.
+    str
+        The rendered directory tree as a single string.
 
     Raises
     ------
@@ -91,7 +91,7 @@ def print_tree(
     """
 
     root = root.resolve()
-    print(root)
+    lines: list[str] = [str(root)]
 
     def iter_children(d: Path) -> list[Path]:
         """
@@ -122,9 +122,9 @@ def print_tree(
 
     def rec(d: Path, prefix: str) -> None:
         """
-        Recursively print a subtree with proper tree-style indentation.
+        Recursively render a subtree with proper tree-style indentation.
 
-        This function prints the children of a directory using the appropriate
+        This function appends the children of a directory using the appropriate
         Unicode branch connectors and maintains vertical continuation bars for
         ancestor levels as needed.
 
@@ -146,7 +146,7 @@ def print_tree(
         for i, child in enumerate(children):
             last = i == n - 1
             branch = "└── " if last else "├── "
-            print(prefix + branch + child.name)
+            lines.append(prefix + branch + child.name)
 
             if is_dir(child):
                 ext = "    " if last else "│   "
@@ -155,3 +155,4 @@ def print_tree(
 
     # If you want the filter to be able to exclude the root itself, handle it outside.
     rec(root, "")
+    return "\n".join(lines)
