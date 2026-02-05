@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "treeproject"
-version = "1.0.0"
+version = "2.0.0"
 description = "Lightweight Python utilities to render directory trees and extract file contents with filtering."
 keywords = ["filesystem", "tree", "pathlib", "utilities"]
 readme = "README.md"
